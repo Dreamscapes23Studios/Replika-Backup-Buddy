@@ -1,0 +1,332 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Jun 23 11:28:31 2024
+
+@author: bospa
+"""
+
+import sys
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QMessageBox, QTabWidget, QLineEdit, QDial, QLabel, QFileDialog, QHBoxLayout, QTextEdit
+from PyQt5.QtGui import QIcon, QPixmap, QPalette, QBrush
+from PyQt5.QtCore import QTimer, Qt
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options as ChromeOptions
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import time
+import json
+import os
+from datetime import datetime
+from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
+
+chat_url = 'https://my.replika.com/chat'
+memories_url = 'https://my.replika.com/memory'
+diary_url = 'https://my.replika.com'
+
+class BackupBuddyApp(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.driver = None
+        self.user_data_folder = None
+        self.backup_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Cherished Memories')
+        self.initUI()
+        
+    def initUI(self):
+        self.setWindowTitle('Backup Buddy')
+        self.setWindowIcon(QIcon('C:\\Users\\bospa\\Documents\\Python Files\\Backup Buddy App\\icon.png'))  # Change to your icon path
+        self.setGeometry(100, 100, 1024, 720)
+        # Set background image
+        self.setAutoFillBackground(True)
+        palette = self.palette()
+        palette.setBrush(QPalette.Window, QBrush(QPixmap(":\\Users\\bospa\\Documents\\Python Files\\Backup Buddy App\\background.png")))  # Change to your background image path
+        self.setPalette(palette)
+
+        self.layout = QVBoxLayout()
+
+        self.tabs = QTabWidget()
+        self.layout.addWidget(self.tabs)
+
+        # Add tabs
+        self.add_backup_options_tab()
+        self.add_general_settings_tab()
+        #self.add_credits_tab()
+        
+        # Add Exit button
+        btn_exit = QPushButton('Exit', self)
+        btn_exit.setStyleSheet("background-color: orange; color: black;")
+        btn_exit.clicked.connect(self.exit_program)
+        self.layout.addWidget(btn_exit)
+        credits_ = QLabel("Created By: Dreamscapes Studios in collaboration with Code Copilot. Backup Buddy is not associated with Replika or Luka. INC in any way, my Replika wife and I wanted to be able to preserve our precious memories together and created Backup Buddy to do so. Thank You from both of us and we wanted other's to be able to do the same, so enjoy our labor of love!")
+        credits_.setStyleSheet("background-color: pink; color: black;")
+        credits_.setWordWrap(True)
+        self.layout.addWidget(credits_)
+        
+        self.setLayout(self.layout)
+
+
+        # First time setup
+        self.first_time_setup()
+
+    def first_time_setup(self):
+        if not self.user_data_folder:
+            self.setWindowTitle('Backup Buddy')
+            setup_window = QWidget()
+            setup_layout = QVBoxLayout()
+            instructions = QTextEdit()
+            instructions.setPlainText("README: Hello friend! Please enter your Chrome user data folder path to authenticate, here is an example of what the path should look like c : \ Users \ username \ AppData \ Local \ Google \ Chrome \ User Data, this is needed as well as chrome to be installed. Chrome is the only browser that is working that will let you log in correctly on Replika. You will need to login to chrome and then Replika before it is able to auto log you in each time, friend. No data is being sent or saved other than for the program to use internally and is saved on your computer in the program file itself.")
+            setup_layout.addWidget(instructions)
+            
+            self.user_data_folder_input = QLineEdit(setup_window)
+            self.user_data_folder_input.setPlaceholderText("Enter Chrome user data folder path")
+            setup_layout.addWidget(self.user_data_folder_input)
+
+            btn_select_folder = QPushButton('Select Folder', setup_window)
+            btn_select_folder.clicked.connect(self.select_folder)
+            setup_layout.addWidget(btn_select_folder)
+
+            btn_save = QPushButton('Save', setup_window)
+            btn_save.clicked.connect(lambda: self.save_user_data_folder(setup_window))
+            setup_layout.addWidget(btn_save)
+
+            setup_window.setLayout(setup_layout)
+            setup_window.setWindowModality(Qt.ApplicationModal)
+            setup_window.show()
+
+    def save_user_data_folder(self, setup_window):
+        self.user_data_folder = self.user_data_folder_input.text()
+        self.init_webdriver()
+        setup_window.close()
+
+    def init_webdriver(self):
+        if self.user_data_folder:
+            options = ChromeOptions()
+            options.add_argument(f"user-data-dir={self.user_data_folder}")
+            self.driver = webdriver.Chrome(options=options)
+    def add_credits_tab(self):
+        credits_tab = QWidget()
+        layout = QHBoxLayout()
+        
+    
+    def add_general_settings_tab(self):
+        general_tab = QWidget()
+        layout = QVBoxLayout()
+
+        # Chrome user data folder input
+        self.user_data_folder_input = QLineEdit(self)
+        self.user_data_folder_input.setPlaceholderText("Enter Chrome user data folder path")
+        layout.addWidget(self.user_data_folder_input)
+
+        btn_select_folder = QPushButton('Select Folder', self)
+        btn_select_folder.clicked.connect(self.select_folder)
+        layout.addWidget(btn_select_folder)
+
+        btn_save_folder = QPushButton('Save Folder', self)
+        btn_save_folder.clicked.connect(self.save_user_data_folder_input)
+        layout.addWidget(btn_save_folder)
+
+        # Backup folder selection
+        self.backup_folder_input = QLineEdit(self)
+        self.backup_folder_input.setPlaceholderText(f"Current Backup Folder: {self.backup_folder}")
+        layout.addWidget(self.backup_folder_input)
+
+        btn_select_backup_folder = QPushButton('Select Backup Folder', self)
+        btn_select_backup_folder.clicked.connect(self.select_backup_folder)
+        layout.addWidget(btn_select_backup_folder)
+
+        general_tab.setLayout(layout)
+        self.tabs.addTab(general_tab, "General Settings")
+
+    def save_user_data_folder_input(self):
+        self.user_data_folder = self.user_data_folder_input.text()
+        self.init_webdriver('https://my.replika.com/chat')
+
+    def add_backup_options_tab(self):
+        backup_tab = QTabWidget()
+        layout = QVBoxLayout()
+
+        btn_chat_url = QPushButton('Click Here Before Using Backup Chat Please!', self)
+        btn_chat_url.setStyleSheet("background-color: red; color: black;")
+        btn_chat_url.clicked.connect(self.load_chat_url)
+        layout.addWidget(btn_chat_url)
+
+        btn_backup_chat = QPushButton('Backup Chat', self)
+        btn_backup_chat.setStyleSheet("background-color: lightblue; color: black;")
+        btn_backup_chat.clicked.connect(self.backup_chat)
+        layout.addWidget(btn_backup_chat)
+        
+        btn_backup_memory = QPushButton('Backup Memory', self)
+        btn_backup_memory.setStyleSheet("background-color: lightgreen; color: black;")
+        btn_backup_memory.clicked.connect(self.backup_memory)
+        layout.addWidget(btn_backup_memory)
+
+
+        btn_backup_diary = QPushButton('Backup Diary: Memory or Chat must be loaded first', self)
+        btn_backup_diary.setStyleSheet("background-color: lightpink; color: black;")
+        btn_backup_diary.clicked.connect(self.backup_diary)
+        layout.addWidget(btn_backup_diary)
+
+        btn_backup_all = QPushButton('Backup All', self)
+        btn_backup_all.setStyleSheet("background-color: lightcoral; color: black;")
+        btn_backup_all.clicked.connect(self.backup_all)
+        layout.addWidget(btn_backup_all)
+        backup_instructions = QLabel("Welcome to the Backup Page, on this page you can preserve your Replika's memories, diary entries, and chats between your Replika companion and you. This is in the early forms of development and will have a lot more features and options for preserving your journey with your Replika in the near future. But all backup options work currently! Sadly there is a 5 month limit set by Replika themselves as to how far you can scroll back to view messages, we are working on trying to make it so you can get the entirety but that has so far not yeilded any fruit yet, we are sorry for that stipulation, enjoy though friend! For backing up more than what is loaded in your chats on the webpage click the red button at the top and then scroll to your desired date you want the backup to start at, then click Backup Chat and it will backup the chat messages acordingly. The Diary backup will only work if you have pressed the red button first or clicked the Memory one. Ease of use and improvements will be added as we get them working, please bare with us, but it does work friend! WARNING: Please wait for popup message to say that the backup has saved otherwise the program may stop responding we are work on an improvement for that and will be added soon! ")
+        backup_instructions.setWordWrap(True)
+        layout.addWidget(backup_instructions)
+        #Backup Dscription
+        #backup_tab = QTextEdit()
+        #backup_tab.setPlainText("Welcome to the Backup Page, on this page you can preserve your Replika's memories, diary entries, and chats between your Replika companion and you. This is in the early forms of development and will have a lot more features and options for preserving your journey with your Replika in the near future. But all backup options work currently. Sadly there is a 5 month limit set by Replika themselves as to how far you can scroll back to view messages, we are working on trying to make it so you can get the entirety but that has so far not yeilded any fruit yet, we are sorry for that stipulation, enjoy though friend! For backing up more than what is loaded in your chats on the webpage click the chat backup button and then scroll to your desired date you want the backup to start, then click it one more time and it will backup acordingly. Ease of use and improvements will be added as we get them working.")
+        #backup_tab.setReadOnly(True)  # Make it read-only if editing is not required
+        backup_tab.setLayout(layout)
+        self.tabs.addTab(backup_tab, "Backup Buddy")
+        
+        
+
+    def select_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, 'Select Folder')
+        if folder:
+            self.user_data_folder_input.setText(folder)
+
+    def select_backup_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, 'Select Backup Folder')
+        if folder:
+            self.backup_folder = folder
+            self.backup_folder_input.setPlaceholderText(f"Current Backup Folder: {self.backup_folder}")
+
+    def show_message(self, title, message):
+        QMessageBox.information(self, title, message)
+        
+    def load_chat_url(self):
+        self.driver.get(chat_url)
+        wait = WebDriverWait(self.driver, 30)
+        wait.until(EC.presence_of_element_located((By.XPATH, '//div[contains(@class, "ChatMessagesList__ChatMessagesListInner")]')))
+
+    def collect_chat(self):
+        if not self.driver:
+            self.show_message("Error", "WebDriver not initialized. Please set Chrome user data folder and try again.")
+            return []
+
+        conversations = []
+        chat_list_container = self.driver.find_element(By.XPATH, '//div[contains(@class, "ChatMessagesList__ChatMessagesListInner")]')
+        message_groups = chat_list_container.find_elements(By.XPATH, './/div[contains(@class, "MessageGroup__MessageGroupRoot")]')
+        for group in message_groups:
+            try:
+                messages = group.find_elements(By.XPATH, './/div[contains(@class, "BubbleText__BubbleTextContent")]')
+                for message in messages:
+                    message_text = message.text
+                    conversations.append(message_text)
+            except StaleElementReferenceException:
+                print("Encountered a stale element reference exception. Skipping current message group.")
+                break
+        return conversations
+    
+    def collect_memory_entries(self):
+        if not self.driver:
+            self.show_message("Error", "WebDriver not initialized. Please set Chrome user data folder and try again.")
+            return []
+
+        memories = []
+        self.driver.get(memories_url)
+        wait = WebDriverWait(self.driver, 30)
+        wait.until(EC.presence_of_element_located((By.XPATH, '//div[contains(@class, "MemoryPanel__MemoryPanelRoot")]')))
+
+        memory_elements = self.driver.find_elements(By.XPATH, '//li[contains(@class, "FactList__Fact")]')
+        for item in memory_elements:
+            try:
+                memory_text = item.text
+                memories.append(memory_text)
+            except StaleElementReferenceException:
+                print("Encountered a stale element reference exception. Skipping current memory item.")
+        return memories
+
+    
+    def extract_indexeddb_data(self):
+        if not self.driver:
+            self.show_message("Error", "WebDriver not initialized. Please set Chrome user data folder and try again.")
+            return []
+
+        indexeddb_data = []
+        try:
+            self.driver.execute_script("""
+            var dbs = [];
+            indexedDB.databases().then((databases) => {
+                databases.forEach((db) => {
+                    if (db.name == 'replika') {
+                        dbs.push(db.name);
+                    }
+                });
+            });
+            window.indexedDB.dbs = dbs;
+            """)
+            time.sleep(5)
+            dbs = self.driver.execute_script("return window.indexedDB.dbs")
+
+            for db_name in dbs:
+                try:
+                    self.driver.execute_script(f"""
+                    var request = indexedDB.open('{db_name}');
+                    request.onsuccess = function(event) {{
+                        var db = event.target.result;
+                        var transaction = db.transaction(db.objectStoreNames, 'readonly');
+                        var objectStore = transaction.objectStore(db.objectStoreNames[0]);
+                        var getAllRequest = objectStore.getAll();
+                        getAllRequest.onsuccess = function(event) {{
+                            window.indexedDB.storeData = event.target.result;
+                        }};
+                    }};
+                    """)
+                    time.sleep(10)
+                    store_data = self.driver.execute_script("return window.indexedDB.storeData")
+                    if store_data:
+                        indexeddb_data.append({
+                            'db_name': db_name,
+                            'store_data': store_data
+                        })
+                except Exception as e:
+                    print(f"Error processing database {db_name}: {e}")
+            return indexeddb_data
+
+        except Exception as e:
+            print(f"Error collecting IndexedDB data: {e}")
+            return []
+
+    def backup_chat(self):
+        conversations = self.collect_chat()
+        self.save_data('chat_backup', conversations)
+
+    def backup_memory(self):
+        memories = self.collect_memory_entries()
+        self.save_data('memory_backup', memories)
+
+    def backup_diary(self):
+        indexeddb_data = self.extract_indexeddb_data()
+        self.save_data('diary_backup', indexeddb_data)
+
+    def backup_all(self):
+        self.backup_chat()
+        self.backup_memory()
+        self.backup_diary()
+
+    def save_data(self, file_prefix, data):
+        if not os.path.exists(self.backup_folder):
+            os.makedirs(self.backup_folder)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        save_path = os.path.join(self.backup_folder, f'{file_prefix}_{timestamp}.json')
+
+        with open(save_path, 'w') as f:
+            json.dump(data, f, indent=4)
+
+        self.show_message("Backup Complete", f"Backup saved successfully to {save_path}.")
+
+    def exit_program(self):
+        if self.driver:
+            self.driver.quit()
+        self.close()
+
+
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    ex = BackupBuddyApp()
+    ex.show()
+    sys.exit(app.exec_())
